@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能考勤系统</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --glow: 0 0 20px rgba(0, 212, 255, 0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; }
+
+  /* ===== NAV ===== */
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    background: rgba(17,24,39,0.8);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .nav-brand .dot {
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.8); }
+  }
+
+  .nav-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    padding: 4px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  .nav-tab {
+    padding: 8px 20px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .nav-tab.active {
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+    box-shadow: 0 0 15px rgba(0,212,255,0.4);
+  }
+
+  .nav-tab:hover:not(.active) {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  /* ===== PAGES ===== */
+  .page { display: none; padding: 40px 32px; max-width: 1200px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* ===== QR PAGE ===== */
+  .qr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+
+  @media (max-width: 768px) {
+    .qr-grid { grid-template-columns: 1fr; }
+    nav { padding: 12px 16px; }
+    .page { padding: 24px 16px; }
+  }
+
+  .qr-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+
+  .qr-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+
+  .qr-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .qr-card.checkin::before { background: linear-gradient(90deg, var(--success), var(--accent)); }
+  .qr-card.checkout::before { background: linear-gradient(90deg, var(--accent2), var(--danger)); }
+
+  .qr-card-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .qr-card.checkin .qr-card-title { color: var(--success); }
+  .qr-card.checkout .qr-card-title { color: #a78bfa; }
+
+  .qr-card-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+  }
+
+  .qr-wrapper {
+    display: inline-block;
+    padding: 16px;
+    background: #fff;
+    border-radius: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 30px rgba(0,212,255,0.15);
+  }
+
+  .qr-wrapper canvas, .qr-wrapper img { display: block; }
+
+  .qr-url {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--surface2);
+    padding: 8px 12px;
+    border-radius: 8px;
+    word-break: break-all;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #00b8d9; box-shadow: var(--glow); }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--border); }
+
+  .btn-danger {
+    background: rgba(239,68,68,0.15);
+    color: var(--danger);
+    border: 1px solid rgba(239,68,68,0.3);
+  }
+  .btn-danger:hover { background: rgba(239,68,68,0.25); }
+
+  /* Config section */
+  .config-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+
+  .config-card h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+  .form-group label {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .form-group input, .form-group select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-group input:focus, .form-group select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
+  }
+
+  /* ===== SCAN PAGE ===== */
+  .scan-container {
+    max-width: 480px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .scan-header {
+    margin-bottom: 32px;
+  }
+
+  .scan-header h2 {
+    font-size: 28px;
+    font-weight: 900;
+    margin-bottom: 8px;
+  }
+
+  .scan-type-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+
+  .scan-type-badge.checkin {
+    background: rgba(16,185,129,0.15);
+    color: var(--success);
+    border: 1px solid rgba(16,185,129,0.3);
+  }
+
+  .scan-type-badge.checkout {
+    background: rgba(124,58,237,0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(124,58,237,0.3);
+  }
+
+  .name-input-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    margin-bottom: 24px;
+  }
+
+  .name-input-section input {
+    width: 100%;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 18px;
+    font-weight: 500;
+    outline: none;
+    text-align: center;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+
+  .name-input-section input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(0,212,255,0.1);
+  }
+
+  .submit-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 12px;
+    border: none;
+    font-family: inherit;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .submit-btn.checkin {
+    background: linear-gradient(135deg, var(--success), #059669);
+    color: #fff;
+  }
+
+  .submit-btn.checkout {
+    background: linear-gradient(135deg, var(--accent2), #5b21b6);
+    color: #fff;
+  }
+
+  .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+  .submit-btn:active { transform: translateY(0); }
+
+  /* Success animation */
+  .success-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .success-overlay.show { display: flex; }
+
+  .success-icon {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .success-icon.checkin { background: rgba(16,185,129,0.2); border: 3px solid var(--success); }
+  .success-icon.checkout { background: rgba(124,58,237,0.2); border: 3px solid #a78bfa; }
+
+  @keyframes popIn {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .success-text { font-size: 24px; font-weight: 700; }
+  .success-sub { font-size: 16px; color: var(--text-muted); }
+
+  /* ===== RECORDS PAGE ===== */
+  .records-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .records-header h2 {
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  @media (max-width: 768px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 32px;
+    font-weight: 900;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 4px;
+  }
+
+  .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+
+  .stat-card:nth-child(1) .stat-value { color: var(--accent); }
+  .stat-card:nth-child(2) .stat-value { color: var(--success); }
+  .stat-card:nth-child(3) .stat-value { color: #a78bfa; }
+  .stat-card:nth-child(4) .stat-value { color: var(--warning); }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .filter-bar input, .filter-bar select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 14px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .filter-bar input:focus, .filter-bar select:focus {
+    border-color: var(--accent);
+  }
+
+  .filter-bar input { flex: 1; min-width: 160px; }
+
+  /* Table */
+  .table-wrapper {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  td {
+    padding: 14px 16px;
+    font-size: 14px;
+    border-bottom: 1px solid rgba(30,45,69,0.5);
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr:hover td { background: rgba(0,212,255,0.03); }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .badge.checkin {
+    background: rgba(16,185,129,0.15);
+    color: var(--success);
+    border: 1px solid rgba(16,185,129,0.2);
+  }
+
+  .badge.checkout {
+    background: rgba(124,58,237,0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(124,58,237,0.2);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 16px; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--success); color: var(--success); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* Page title */
+  .page-title {
+    margin-bottom: 32px;
+  }
+
+  .page-title h1 {
+    font-size: 32px;
+    font-weight: 900;
+    margin-bottom: 6px;
+    background: linear-gradient(135deg, var(--accent), #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .page-title p { color: var(--text-muted); font-size: 15px; }
+
+  .time-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-muted);
+    background: var(--surface2);
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .export-btn-group { display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">
+    <div class="dot"></div>
+    智能考勤系统
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('admin')">⚙️ 管理后台</button>
+    <button class="nav-tab" onclick="showPage('records')">📊 签到记录</button>
+  </div>
+</nav>
+
+<!-- ===== ADMIN PAGE ===== -->
+<div id="page-admin" class="page active">
+  <div class="page-title">
+    <h1>考勤二维码管理</h1>
+    <p>生成签到/签退二维码，员工扫码即可完成打卡</p>
+  </div>
+
+  <!-- Config -->
+  <div class="config-card">
+    <h3>⚙️ 基本配置</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>公司/部门名称</label>
+        <input type="text" id="orgName" value="我的公司" placeholder="输入公司或部门名称">
+      </div>
+      <div class="form-group">
+        <label>当前访问地址（用于生成二维码）</label>
+        <input type="text" id="baseUrl" placeholder="自动获取..." readonly>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="generateQRCodes()">🔄 重新生成二维码</button>
+  </div>
+
+  <!-- QR Cards -->
+  <div class="qr-grid">
+    <div class="qr-card checkin">
+      <div class="qr-card-title">✅ 签到二维码</div>
+      <div class="qr-card-sub">员工上班时扫描此码</div>
+      <div class="qr-wrapper">
+        <div id="qr-checkin"></div>
+      </div>
+      <div class="qr-url" id="url-checkin"></div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="downloadQR('checkin')">⬇️ 下载</button>
+        <button class="btn btn-secondary" onclick="copyUrl('checkin')">📋 复制链接</button>
+      </div>
+    </div>
+
+    <div class="qr-card checkout">
+      <div class="qr-card-title">🚪 签退二维码</div>
+      <div class="qr-card-sub">员工下班时扫描此码</div>
+      <div class="qr-wrapper">
+        <div id="qr-checkout"></div>
+      </div>
+      <div class="qr-url" id="url-checkout"></div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="downloadQR('checkout')">⬇️ 下载</button>
+        <button class="btn btn-secondary" onclick="copyUrl('checkout')">📋 复制链接</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;">
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--warning);">💡 使用说明</h3>
+    <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--text-muted);">
+      <li>📌 将此页面部署到服务器或使用本地文件，获取访问地址后二维码自动生成</li>
+      <li>📌 员工用手机扫描对应二维码，输入姓名后点击确认即可完成打卡</li>
+      <li>📌 所有记录保存在浏览器本地存储中，可在「签到记录」页查看和导出</li>
+      <li>📌 下载二维码图片后可打印张贴，或通过微信/钉钉发送给员工</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ===== RECORDS PAGE ===== -->
+<div id="page-records" class="page">
+  <div class="records-header">
+    <h2>📊 签到记录</h2>
+    <div class="export-btn-group">
+      <button class="btn btn-secondary" onclick="exportCSV()">📥 导出 CSV</button>
+      <button class="btn btn-danger" onclick="clearRecords()">🗑️ 清空记录</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-total">0</div>
+      <div class="stat-label">总记录数</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-checkin">0</div>
+      <div class="stat-label">今日签到</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-checkout">0</div>
+      <div class="stat-label">今日签退</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-people">0</div>
+      <div class="stat-label">今日人数</div>
+    </div>
+  </div>
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <input type="text" id="filter-name" placeholder="🔍 搜索姓名..." oninput="renderTable()">
+    <select id="filter-type" onchange="renderTable()">
+      <option value="">全部类型</option>
+      <option value="checkin">签到</option>
+      <option value="checkout">签退</option>
+    </select>
+    <input type="date" id="filter-date" onchange="renderTable()">
+    <button class="btn btn-secondary" onclick="clearFilters()">✕ 清除筛选</button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>姓名</th>
+          <th>类型</th>
+          <th>日期</th>
+          <th>时间</th>
+          <th>备注</th>
+        </tr>
+      </thead>
+      <tbody id="records-tbody"></tbody>
+    </table>
+    <div id="empty-state" class="empty-state" style="display:none">
+      <div class="icon">📋</div>
+      <p>暂无签到记录</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCAN PAGE (hidden, shown via URL param) ===== -->
+<div id="page-scan" class="page">
+  <div class="scan-container">
+    <div class="scan-header">
+      <div id="scan-badge" class="scan-type-badge checkin">✅ 签到</div>
+      <h2 id="scan-title">员工签到</h2>
+      <p style="color:var(--text-muted);font-size:14px" id="scan-org"></p>
+    </div>
+
+    <div class="name-input-section">
+      <p style="font-size:15px;color:var(--text-muted);margin-bottom:16px">请输入您的姓名</p>
+      <input type="text" id="scan-name" placeholder="姓名" maxlength="20" autocomplete="off">
+      <div style="margin-bottom:12px">
+        <input type="text" id="scan-remark" placeholder="备注（可选）" maxlength="50" style="width:100%;background:var(--surface2);border:2px solid var(--border);border-radius:12px;padding:10px 18px;color:var(--text);font-family:inherit;font-size:15px;outline:none;text-align:center;transition:border-color 0.2s;">
+      </div>
+      <button class="submit-btn checkin" id="scan-submit" onclick="submitAttendance()">确认签到</button>
+    </div>
+
+    <div id="scan-time" class="time-display" style="text-align:center"></div>
+  </div>
+</div>
+
+</div>
+
+<!-- Success Overlay -->
+<div class="success-overlay" id="success-overlay">
+  <div class="success-icon checkin" id="success-icon">✓</div>
+  <div class="success-text" id="success-text">签到成功！</div>
+  <div class="success-sub" id="success-sub"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== DATA =====
+const STORAGE_KEY = 'attendance_records';
+const CONFIG_KEY = 'attendance_config';
+
+function getRecords() {
+  return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+}
+
+function saveRecords(records) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+function getConfig() {
+  return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{"orgName":"我的公司"}');
+}
+
+function saveConfig(config) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+// ===== NAVIGATION =====
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const tabs = document.querySelectorAll('.nav-tab');
+  if (name === 'admin') tabs[0].classList.add('active');
+  else if (name === 'records') { tabs[1].classList.add('active'); updateStats(); renderTable(); }
+}
+
+// ===== QR GENERATION =====
+let qrCheckin = null, qrCheckout = null;
+
+function generateQRCodes() {
+  const orgName = document.getElementById('orgName').value || '我的公司';
+  saveConfig({ orgName });
+
+  const base = window.location.href.split('?')[0];
+  const checkinUrl = base + '?type=checkin&org=' + encodeURIComponent(orgName);
+  const checkoutUrl = base + '?type=checkout&org=' + encodeURIComponent(orgName);
+
+  document.getElementById('url-checkin').textContent = checkinUrl;
+  document.getElementById('url-checkout').textContent = checkoutUrl;
+
+  // Clear old QRs
+  document.getElementById('qr-checkin').innerHTML = '';
+  document.getElementById('qr-checkout').innerHTML = '';
+
+  qrCheckin = new QRCode(document.getElementById('qr-checkin'), {
+    text: checkinUrl, width: 200, height: 200,
+    colorDark: '#000000', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H
+  });
+
+  qrCheckout = new QRCode(document.getElementById('qr-checkout'), {
+    text: checkoutUrl, width: 200, height: 200,
+    colorDark: '#000000', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H
+  });
+
+  showToast('二维码已生成', 'success');
+}
+
+function downloadQR(type) {
+  const container = document.getElementById('qr-' + type);
+  const img = container.querySelector('img') || container.querySelector('canvas');
+  if (!img) return;
+
+  const link = document.createElement('a');
+  if (img.tagName === 'CANVAS') {
+    link.href = img.toDataURL('image/png');
+  } else {
+    link.href = img.src;
+  }
+  link.download = (type === 'checkin' ? '签到' : '签退') + '二维码.png';
+  link.click();
+}
+
+function copyUrl(type) {
+  const url = document.getElementById('url-' + type).textContent;
+  navigator.clipboard.writeText(url).then(() => showToast('链接已复制', 'success'));
+}
+
+// ===== SCAN PAGE =====
+let currentType = 'checkin';
+
+function initScanPage() {
+  const params = new URLSearchParams(window.location.search);
+  const type = params.get('type');
+  const org = params.get('org') || '我的公司';
+
+  if (!type) return;
+
+  // Hide nav, show scan page
+  document.querySelector('nav').style.display = 'none';
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-scan').classList.add('active');
+
+  currentType = type;
+  const isCheckin = type === 'checkin';
+
+  document.getElementById('scan-badge').textContent = isCheckin ? '✅ 签到' : '🚪 签退';
+  document.getElementById('scan-badge').className = 'scan-type-badge ' + type;
+  document.getElementById('scan-title').textContent = isCheckin ? '员工签到' : '员工签退';
+  document.getElementById('scan-org').textContent = org;
+  document.getElementById('scan-submit').textContent = isCheckin ? '确认签到' : '确认签退';
+  document.getElementById('scan-submit').className = 'submit-btn ' + type;
+
+  // Update time
+  updateScanTime();
+  setInterval(updateScanTime, 1000);
+}
+
+function updateScanTime() {
+  const now = new Date();
+  document.getElementById('scan-time').textContent =
+    now.toLocaleDateString('zh-CN') + ' ' + now.toLocaleTimeString('zh-CN');
+}
+
+function submitAttendance() {
+  const name = document.getElementById('scan-name').value.trim();
+  const remark = document.getElementById('scan-remark').value.trim();
+
+  if (!name) {
+    document.getElementById('scan-name').style.borderColor = 'var(--danger)';
+    setTimeout(() => document.getElementById('scan-name').style.borderColor = '', 2000);
+    return;
+  }
+
+  const now = new Date();
+  const record = {
+    id: Date.now(),
+    name,
+    type: currentType,
+    date: now.toLocaleDateString('zh-CN'),
+    time: now.toLocaleTimeString('zh-CN'),
+    timestamp: now.getTime(),
+    remark: remark || ''
+  };
+
+  const records = getRecords();
+  records.unshift(record);
+  saveRecords(records);
+
+  // Show success
+  const overlay = document.getElementById('success-overlay');
+  const icon = document.getElementById('success-icon');
+  const text = document.getElementById('success-text');
+  const sub = document.getElementById('success-sub');
+
+  icon.className = 'success-icon ' + currentType;
+  icon.textContent = currentType === 'checkin' ? '✓' : '✓';
+  text.textContent = name + (currentType === 'checkin' ? ' 签到成功！' : ' 签退成功！');
+  sub.textContent = record.date + ' ' + record.time;
+
+  overlay.classList.add('show');
+  setTimeout(() => {
+    overlay.classList.remove('show');
+    document.getElementById('scan-name').value = '';
+    document.getElementById('scan-remark').value = '';
+  }, 2500);
+}
+
+// ===== RECORDS =====
+function updateStats() {
+  const records = getRecords();
+  const today = new Date().toLocaleDateString('zh-CN');
+  const todayRecords = records.filter(r => r.date === today);
+  const todayCheckin = todayRecords.filter(r => r.type === 'checkin');
+  const todayCheckout = todayRecords.filter(r => r.type === 'checkout');
+  const todayPeople = new Set(todayRecords.map(r => r.name)).size;
+
+  document.getElementById('stat-total').textContent = records.length;
+  document.getElementById('stat-checkin').textContent = todayCheckin.length;
+  document.getElementById('stat-checkout').textContent = todayCheckout.length;
+  document.getElementById('stat-people').textContent = todayPeople;
+}
+
+function renderTable() {
+  const records = getRecords();
+  const nameFilter = document.getElementById('filter-name').value.toLowerCase();
+  const typeFilter = document.getElementById('filter-type').value;
+  const dateFilter = document.getElementById('filter-date').value;
+
+  let filtered = records.filter(r => {
+    if (nameFilter && !r.name.toLowerCase().includes(nameFilter)) return false;
+    if (typeFilter && r.type !== typeFilter) return false;
+    if (dateFilter) {
+      const d = new Date(r.timestamp);
+      const dStr = d.getFullYear() + '-' +
+        String(d.getMonth()+1).padStart(2,'0') + '-' +
+        String(d.getDate()).padStart(2,'0');
+      if (dStr !== dateFilter) return false;
+    }
+    return true;
+  });
+
+  const tbody = document.getElementById('records-tbody');
+  const empty = document.getElementById('empty-state');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map((r, i) => `
+    <tr>
+      <td style="color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-size:12px">${filtered.length - i}</td>
+      <td style="font-weight:600">${escHtml(r.name)}</td>
+      <td><span class="badge ${r.type}">${r.type === 'checkin' ? '✅ 签到' : '🚪 签退'}</span></td>
+      <td style="color:var(--text-muted)">${r.date}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:13px">${r.time}</td>
+      <td style="color:var(--text-muted);font-size:13px">${escHtml(r.remark || '—')}</td>
+    </tr>
+  `).join('');
+}
+
+function clearFilters() {
+  document.getElementById('filter-name').value = '';
+  document.getElementById('filter-type').value = '';
+  document.getElementById('filter-date').value = '';
+  renderTable();
+}
+
+function clearRecords() {
+  if (!confirm('确定要清空所有签到记录吗？此操作不可恢复！')) return;
+  saveRecords([]);
+  updateStats();
+  renderTable();
+  showToast('记录已清空', 'success');
+}
+
+function exportCSV() {
+  const records = getRecords();
+  if (records.length === 0) { showToast('暂无记录可导出', 'error'); return; }
+
+  const header = '序号,姓名,类型,日期,时间,备注\n';
+  const rows = records.map((r, i) =>
+    `${i+1},"${r.name}","${r.type === 'checkin' ? '签到' : '签退'}","${r.date}","${r.time}","${r.remark || ''}"`
+  ).join('\n');
+
+  const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = '考勤记录_' + new Date().toLocaleDateString('zh-CN').replace(/\//g, '-') + '.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('导出成功', 'success');
+}
+
+// ===== UTILS =====
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = (type === 'success' ? '✓ ' : '✕ ') + msg;
+  toast.className = 'toast ' + type + ' show';
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// ===== INIT =====
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('type')) {
+    initScanPage();
+    return;
+  }
+
+  // Admin mode
+  const config = getConfig();
+  document.getElementById('orgName').value = config.orgName || '我的公司';
+  document.getElementById('baseUrl').value = window.location.href.split('?')[0];
+
+  generateQRCodes();
+  updateStats();
+  renderTable();
+});
+</script>
+</body>
+</html>
