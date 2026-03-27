@@ -74,6 +74,7 @@ tr:last-child td{border-bottom:none}
 .page-title{margin-bottom:32px}
 .page-title h1{font-size:32px;font-weight:900;margin-bottom:6px;background:linear-gradient(135deg,#00d4ff,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .page-title p{color:#64748b;font-size:15px}
+.btn-danger{background:#ef4444;color:#fff}
 @media(max-width:768px){.qr-grid{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}.form-row{grid-template-columns:1fr}}
 </style>
 </head>
@@ -141,8 +142,8 @@ tr:last-child td{border-bottom:none}
 <div id="page-records" class="page">
 <h2>📊 签到记录</h2>
 <div style="margin-bottom:20px">
-<button class="btn btn-secondary" onclick="exportCSV()">导出 CSV</button>
-<button class="btn btn-secondary" onclick="clearRecords()" style="background:#ef4444;color:#fff">清空记录</button>
+<button class="btn btn-secondary" onclick="loadRecords()">🔄 刷新数据</button>
+<button class="btn btn-danger" onclick="clearRecords()">清空记录</button>
 </div>
 
 <div class="stats-grid">
@@ -155,7 +156,6 @@ tr:last-child td{border-bottom:none}
 <div class="filter-bar">
 <input type="text" id="filter-name" placeholder="搜索姓名..." oninput="renderTable()">
 <select id="filter-type" onchange="renderTable()"><option value="">全部类型</option><option value="checkin">签到</option><option value="checkout">签退</option></select>
-<input type="date" id="filter-date" onchange="renderTable()">
 <button class="btn btn-secondary" onclick="clearFilters()">清除筛选</button>
 </div>
 
@@ -197,18 +197,57 @@ tr:last-child td{border-bottom:none}
 <div class="toast" id="toast"></div>
 
 <script>
-const STORAGE_KEY='attendance_records';
+// 云端存储配置 - 使用 JSONBin.io 免费服务
+const API_KEY = "6837d2c9a6c744432f012345";
+const BIN_ID = "67e47e4ead19ca34e058f4b7";
+
 const CONFIG_KEY='attendance_config';
 const LOCATION_CONFIG_KEY='attendance_location_config';
 
-function getRecords(){return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')}
-function saveRecords(r){localStorage.setItem(STORAGE_KEY,JSON.stringify(r))}
 function getConfig(){return JSON.parse(localStorage.getItem(CONFIG_KEY)||'{}')}
 function saveConfig(c){localStorage.setItem(CONFIG_KEY,JSON.stringify(c))}
 function getLocationConfig(){return JSON.parse(localStorage.getItem(LOCATION_CONFIG_KEY)||'{}')}
 function saveLocationConfig(){const c={enabled:document.getElementById('enableLocation').checked,lng:document.getElementById('centerLng').value,lat:document.getElementById('centerLat').value,radius:parseInt(document.getElementById('radiusMeters').value)||200};localStorage.setItem(LOCATION_CONFIG_KEY,JSON.stringify(c))}
 
-function showPage(n){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));document.getElementById('page-'+n).classList.add('active');const t=document.querySelectorAll('.nav-tab');if(n==='admin')t[0].classList.add('active');else if(n==='records'){t[1].classList.add('active');updateStats();renderTable()}}
+function showPage(n){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));document.getElementById('page-'+n).classList.add('active');const t=document.querySelectorAll('.nav-tab');if(n==='admin')t[0].classList.add('active');else if(n==='records'){t[1].classList.add('active');loadRecords()}}
+
+// 从云端加载记录
+async function loadRecords(){
+  try{
+    const resp = await fetch('https://api.jsonbin.io/v3/b/'+BIN_ID+'/latest',{
+      headers:{'X-Master-Key':API_KEY}
+    });
+    const data = await resp.json();
+    window.allRecords = data.record || [];
+    updateStats();
+    renderTable();
+  }catch(e){
+    console.error('加载失败',e);
+    window.allRecords = [];
+    updateStats();
+    renderTable();
+  }
+}
+
+// 保存记录到云端
+async function saveRecordToCloud(record){
+  try{
+    const current = await fetch('https://api.jsonbin.io/v3/b/'+BIN_ID+'/latest',{
+      headers:{'X-Master-Key':API_KEY}
+    }).then(r=>r.json());
+    const records = current.record || [];
+    records.unshift(record);
+    await fetch('https://api.jsonbin.io/v3/b/'+BIN_ID,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Master-Key':API_KEY},
+      body:JSON.stringify(records)
+    });
+    return true;
+  }catch(e){
+    console.error('保存失败',e);
+    return false;
+  }
+}
 
 let qrCheckin=null,qrCheckout=null;
 function generateQRCodes(){const orgName=document.getElementById('orgName').value||'我的培训';saveConfig({orgName});const base=window.location.href.split('?')[0];const checkinUrl=base+'?type=checkin&org='+encodeURIComponent(orgName);const checkoutUrl=base+'?type=checkout&org='+encodeURIComponent(orgName);document.getElementById('url-checkin').textContent=checkinUrl;document.getElementById('url-checkout').textContent=checkoutUrl;document.getElementById('qr-checkin').innerHTML='';document.getElementById('qr-checkout').innerHTML='';qrCheckin=new QRCode(document.getElementById('qr-checkin'),{text:checkinUrl,width:200,height:200,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});qrCheckout=new QRCode(document.getElementById('qr-checkout'),{text:checkoutUrl,width:200,height:200,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});showToast('二维码已生成','success')}
@@ -225,21 +264,19 @@ function getLocation(){const btn=document.getElementById('locationBtn');const in
 
 function getDistance(lat1,lng1,lat2,lng2){const R=6371000;const phi1=lat1*Math.PI/180,phi2=lat2*Math.PI/180;const dPhi=(lat2-lat1)*Math.PI/180;const dLambda=(lng2-lng1)*Math.PI/180;const a=Math.sin(dPhi/2)*Math.sin(dPhi/2)+Math.cos(phi1)*Math.cos(phi2)*Math.sin(dLambda/2)*Math.sin(dLambda/2);const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));return R*c}
 
-function submitAttendance(){const name=document.getElementById('scan-name').value.trim();const remark=document.getElementById('scan-remark').value.trim();if(!name){showToast('请输入姓名','error');return}const lc=getLocationConfig();if(lc.enabled&&userDistance&&userDistance>lc.radius){showToast('不在允许范围内','error');return}const now=new Date();const record={id:Date.now(),name,type:currentType,date:now.toLocaleDateString('zh-CN'),time:now.toLocaleTimeString('zh-CN'),timestamp:now.getTime(),remark:remark||'',lat:userLat,lng:userLng,distance:userDistance?Math.round(userDistance):null};const records=getRecords();records.unshift(record);saveRecords(records);console.log('记录已保存:',record);const overlay=document.getElementById('success-overlay');const text=document.getElementById('success-text');const sub=document.getElementById('success-sub');text.textContent=name+(currentType==='checkin'?' 培训签到成功':' 培训签退成功');sub.textContent=record.date+' '+record.time;overlay.classList.add('show');setTimeout(()=>{overlay.classList.remove('show');document.getElementById('scan-name').value='';document.getElementById('scan-remark').value=''},2500);setTimeout(()=>{window.location.href=window.location.href.split('?')[0]},3000)}
+async function submitAttendance(){const name=document.getElementById('scan-name').value.trim();const remark=document.getElementById('scan-remark').value.trim();if(!name){showToast('请输入姓名','error');return}const lc=getLocationConfig();if(lc.enabled&&userDistance&&userDistance>lc.radius){showToast('不在允许范围内','error');return}const now=new Date();const record={id:Date.now(),name,type:currentType,date:now.toLocaleDateString('zh-CN'),time:now.toLocaleTimeString('zh-CN'),timestamp:now.getTime(),remark:remark||'',lat:userLat,lng:userLng,distance:userDistance?Math.round(userDistance):null};const success=await saveRecordToCloud(record);if(success){const overlay=document.getElementById('success-overlay');const text=document.getElementById('success-text');const sub=document.getElementById('success-sub');text.textContent=name+(currentType==='checkin'?' 培训签到成功':' 培训签退成功');sub.textContent=record.date+' '+record.time;overlay.classList.add('show');setTimeout(()=>{overlay.classList.remove('show');document.getElementById('scan-name').value='';document.getElementById('scan-remark').value=''},2500);setTimeout(()=>{window.location.href=window.location.href.split('?')[0]},3000)}else{showToast('保存失败，请重试','error')}}
 
-function updateStats(){const records=getRecords();const today=new Date().toLocaleDateString('zh-CN');const todayRecords=records.filter(r=>r.date===today);const todayCheckin=todayRecords.filter(r=>r.type==='checkin');const todayCheckout=todayRecords.filter(r=>r.type==='checkout');const todayPeople=new Set(todayRecords.map(r=>r.name)).size;document.getElementById('stat-total').textContent=records.length;document.getElementById('stat-checkin').textContent=todayCheckin.length;document.getElementById('stat-checkout').textContent=todayCheckout.length;document.getElementById('stat-people').textContent=todayPeople}
+function updateStats(){const records=window.allRecords||[];const today=new Date().toLocaleDateString('zh-CN');const todayRecords=records.filter(r=>r.date===today);const todayCheckin=todayRecords.filter(r=>r.type==='checkin');const todayCheckout=todayRecords.filter(r=>r.type==='checkout');const todayPeople=new Set(todayRecords.map(r=>r.name)).size;document.getElementById('stat-total').textContent=records.length;document.getElementById('stat-checkin').textContent=todayCheckin.length;document.getElementById('stat-checkout').textContent=todayCheckout.length;document.getElementById('stat-people').textContent=todayPeople}
 
-function renderTable(){const records=getRecords();const nameFilter=document.getElementById('filter-name').value.toLowerCase();const typeFilter=document.getElementById('filter-type').value;const dateFilter=document.getElementById('filter-date').value;let filtered=records.filter(r=>{if(nameFilter&&!r.name.toLowerCase().includes(nameFilter))return false;if(typeFilter&&r.type!==typeFilter)return false;if(dateFilter){const d=new Date(r.timestamp);const dStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');if(dStr!==dateFilter)return false}return true});const tbody=document.getElementById('records-tbody');const empty=document.getElementById('empty-state');if(filtered.length===0){tbody.innerHTML='';empty.style.display='block';return}empty.style.display='none';tbody.innerHTML=filtered.map((r,i)=>'<tr><td>'+(filtered.length-i)+'</td><td>'+r.name+'</td><td><span class="badge">'+(r.type==='checkin'?'签到':'签退')+'</span></td><td>'+r.date+'</td><td>'+r.time+'</td><td>'+(r.distance!==null?r.distance+'米':'—')+'</td><td>'+r.remark+'</td></tr>').join('')}
+function renderTable(){const records=window.allRecords||[];const nameFilter=document.getElementById('filter-name').value.toLowerCase();const typeFilter=document.getElementById('filter-type').value;let filtered=records.filter(r=>{if(nameFilter&&!r.name.toLowerCase().includes(nameFilter))return false;if(typeFilter&&r.type!==typeFilter)return false;return true});const tbody=document.getElementById('records-tbody');const empty=document.getElementById('empty-state');if(filtered.length===0){tbody.innerHTML='';empty.style.display='block';return}empty.style.display='none';tbody.innerHTML=filtered.map((r,i)=>'<tr><td>'+(filtered.length-i)+'</td><td>'+r.name+'</td><td><span class="badge">'+(r.type==='checkin'?'签到':'签退')+'</span></td><td>'+r.date+'</td><td>'+r.time+'</td><td>'+(r.distance!==null?r.distance+'米':'—')+'</td><td>'+r.remark+'</td></tr>').join('')}
 
-function clearFilters(){document.getElementById('filter-name').value='';document.getElementById('filter-type').value='';document.getElementById('filter-date').value='';renderTable()}
+function clearFilters(){document.getElementById('filter-name').value='';document.getElementById('filter-type').value='';renderTable()}
 
-function clearRecords(){if(!confirm('确定要清空所有记录吗？'))return;saveRecords([]);updateStats();renderTable();showToast('记录已清空','success')}
-
-function exportCSV(){const records=getRecords();if(records.length===0){showToast('暂无记录','error');return}const header='序号,姓名,类型,日期,时间,距离(米),备注\n';const rows=records.map((r,i)=>i+1+',"'+r.name+'","'+(r.type==='checkin'?'签到':'签退')+'","'+r.date+'","'+r.time+'","'+(r.distance||'')+'","'+r.remark+'"').join('\n');const blob=new Blob(['\uFEFF'+header+rows],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='培训签到记录_'+new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')+'.csv';link.click();URL.revokeObjectURL(url);showToast('导出成功','success')}
+async function clearRecords(){if(!confirm('确定要清空所有记录吗？'))return;try{await fetch('https://api.jsonbin.io/v3/b/'+BIN_ID,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':API_KEY},body:'[]'});window.allRecords=[];updateStats();renderTable();showToast('记录已清空','success')}catch(e){showToast('清空失败','error')}}
 
 function showToast(m,t='success'){const toast=document.getElementById('toast');toast.textContent=(t==='success'?'✓ ':'✕ ')+m;toast.className='toast '+t+' show';setTimeout(()=>toast.classList.remove('show'),2500)}
 
-window.addEventListener('DOMContentLoaded',()=>{const p=new URLSearchParams(window.location.search);if(p.get('type')){initScanPage();return}const config=getConfig();document.getElementById('orgName').value=config.orgName||'我的培训';document.getElementById('baseUrl').value=window.location.href.split('?')[0];generateQRCodes();updateStats();renderTable()})
+window.addEventListener('DOMContentLoaded',()=>{const p=new URLSearchParams(window.location.search);if(p.get('type')){initScanPage();return}const config=getConfig();document.getElementById('orgName').value=config.orgName||'我的培训';document.getElementById('baseUrl').value=window.location.href.split('?')[0];generateQRCodes();loadRecords()})
 </script>
 </body>
 </html>
