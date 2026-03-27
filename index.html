@@ -206,7 +206,7 @@ const LOCATION_CONFIG_KEY='attendance_location_config';
 
 function getConfig(){return JSON.parse(localStorage.getItem(CONFIG_KEY)||'{}')}
 function saveConfig(c){localStorage.setItem(CONFIG_KEY,JSON.stringify(c))}
-function getLocationConfig(){return JSON.parse(localStorage.getItem(LOCATION_CONFIG_KEY)||'{}')}
+function getLocationConfig(){return JSON.parse(localStorage.getItem(LOCATION_CONFIG_KEY)||'{"enabled":false,"lng":"111.796523","lat":"40.486366","radius":200}')}
 function saveLocationConfig(){const c={enabled:document.getElementById('enableLocation').checked,lng:document.getElementById('centerLng').value,lat:document.getElementById('centerLat').value,radius:parseInt(document.getElementById('radiusMeters').value)||200};localStorage.setItem(LOCATION_CONFIG_KEY,JSON.stringify(c))}
 
 function showPage(n){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));document.getElementById('page-'+n).classList.add('active');const t=document.querySelectorAll('.nav-tab');if(n==='admin')t[0].classList.add('active');else if(n==='records'){t[1].classList.add('active');loadRecords()}}
